@@ -189,6 +189,38 @@ def test_sirket_vkn_ile_yon_otomatik_belirlenir(tmp_path):
     assert "Toplam Gelir: 118,00 TL".encode() in resp.data or "118".encode() in resp.data
 
 
+def test_yeniden_siniflandir_gecmis_kayitlari_gelire_cevirir(tmp_path):
+    client = _client(tmp_path)
+    # VKN henüz kayıtlı değilken "gelen fatura" (gider) olarak içe aktar
+    with open(FIXTURES / "ornek_fatura_1.xml", "rb") as f:
+        client.post(
+            "/efatura",
+            data={"tur": "gider", "dosyalar": (f, "ornek_fatura_1.xml")},
+            content_type="multipart/form-data",
+        )
+    resp = client.get("/")
+    assert "118,00 TL".encode() in resp.data
+    assert "0,00 TL".encode() in resp.data  # gelir henüz sıfır
+
+    # Şirket VKN'sini şimdi kaydet, sonra yeniden sınıflandır
+    client.post("/efatura/sirket-bilgisi", data={"sirket_vkn": "9876543210"})
+    resp = client.post("/efatura/yeniden-siniflandir", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "gelire çevrildi".encode() in resp.data
+
+    resp = client.get("/")
+    # Kayıt artık gelir sütununda görünmeli, gider sütununda değil
+    assert b'text-end text-success">118.00<' in resp.data
+    assert b'text-end text-danger"><' in resp.data
+
+
+def test_yeniden_siniflandir_vkn_yoksa_hata_verir(tmp_path):
+    client = _client(tmp_path)
+    resp = client.post("/efatura/yeniden-siniflandir", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "önce şirket VKN".encode() in resp.data
+
+
 def test_tarih_filtresi_calisir(tmp_path):
     client = _client(tmp_path)
     client.post(

@@ -8,10 +8,10 @@ Desteklenen kaynaklar:
   "Gelen Fatura" paketleri genelde bu formattadır)
 
 Yön (gelir/gider) tespiti: Ayarlarda bir "şirket VKN"si tanımlıysa, her
-faturanın satıcı ve alıcı VKN'leri bu değerle karşılaştırılır — şirketimiz
-satıcı tarafındaysa (biz kestiysek) fatura **gelir**, alıcı tarafındaysa
-(bize kesildiyse) fatura **gider** olarak otomatik kaydedilir. Şirket VKN'si
-tanımlı değilse veya faturanın hiçbir tarafı eşleşmiyorsa, çağıranın verdiği
+faturanın satıcı ve alıcı VKN'leri bu değerle karşılaştırılır — şirketimizin
+VKN'si faturanın herhangi bir tarafında geçiyorsa (alıcı ya da satıcı fark
+etmeksizin) fatura **gelir** olarak kaydedilir. Şirket VKN'si tanımlı
+değilse veya faturanın hiçbir tarafı eşleşmiyorsa, çağıranın verdiği
 `varsayilan_tur` kullanılır (elle seçilen "Gelen Fatura" / "Giden Fatura").
 """
 
@@ -171,16 +171,15 @@ def _kategori_tahmin_et(taraf_adi: str) -> str:
 def yonu_belirle(veri: EFaturaVerisi, varsayilan_tur: str, sirket_vkn: str = "") -> str:
     """Faturanın gelir mi gider mi olduğuna karar verir.
 
-    Şirket VKN'si tanımlıysa ve faturanın taraflarından biriyle eşleşiyorsa
-    otomatik belirlenir: şirketimiz satıcıysa gelir, alıcıysa gider.
-    Eşleşme yoksa (veya VKN tanımlı değilse) `varsayilan_tur` kullanılır.
+    Kullanıcının tercihi: şirket VKN'si faturanın herhangi bir tarafında
+    (alıcı ya da satıcı fark etmeksizin) geçiyorsa fatura **gelir** olarak
+    işlenir — yani "bu VKN'ye ait fatura" kuralı, alıcı/satıcı ayrımından
+    önceliklidir. Eşleşme yoksa (veya VKN tanımlı değilse) çağıranın verdiği
+    `varsayilan_tur` (elle seçilen "Gelen Fatura" / "Giden Fatura") kullanılır.
     """
     sirket_vkn = (sirket_vkn or "").strip()
-    if sirket_vkn:
-        if veri.supplier_vkn and veri.supplier_vkn == sirket_vkn:
-            return GELIR
-        if veri.customer_vkn and veri.customer_vkn == sirket_vkn:
-            return GIDER
+    if sirket_vkn and sirket_vkn in (veri.supplier_vkn, veri.customer_vkn):
+        return GELIR
     return varsayilan_tur
 
 
@@ -189,20 +188,26 @@ def efatura_verisinden_islem_olustur(
 ) -> Islem:
     """Ayrıştırılmış e-fatura verisinden bir Islem (kasa defteri kaydı) üretir.
 
-    Yön (gelir/gider) `yonu_belirle` ile tespit edilir: `sirket_vkn`
-    faturanın satıcı tarafıyla eşleşirse gelir, alıcı tarafıyla eşleşirse
-    gider olur; eşleşme yoksa `varsayilan_tur` (elle seçilen yön) kullanılır.
+    Yön (gelir/gider) `yonu_belirle` ile tespit edilir. Karşı taraf (fatura
+    üzerindeki diğer firma) VKN eşleşmesine göre kesin olarak belirlenir;
+    şirketimiz satıcı tarafındaysa karşı taraf müşteridir, alıcı
+    tarafındaysa karşı taraf tedarikçidir — bu, VKN eşleşmesiyle gelir
+    sayılan ama aslında bize kesilen faturalarda "karşı taraf" olarak
+    kendi şirketimizin görünmesini engeller.
     """
     tur = yonu_belirle(veri, varsayilan_tur, sirket_vkn)
+    sirket_vkn = (sirket_vkn or "").strip()
 
-    if tur == GIDER:
-        karsi_taraf = veri.supplier_name
-        vkn = veri.supplier_vkn
-        kategori = _kategori_tahmin_et(veri.supplier_name)
+    if sirket_vkn and veri.supplier_vkn == sirket_vkn:
+        karsi_taraf, vkn = veri.customer_name, veri.customer_vkn
+    elif sirket_vkn and veri.customer_vkn == sirket_vkn:
+        karsi_taraf, vkn = veri.supplier_name, veri.supplier_vkn
+    elif tur == GIDER:
+        karsi_taraf, vkn = veri.supplier_name, veri.supplier_vkn
     else:
-        karsi_taraf = veri.customer_name
-        vkn = veri.customer_vkn
-        kategori = "Satış Geliri"
+        karsi_taraf, vkn = veri.customer_name, veri.customer_vkn
+
+    kategori = _kategori_tahmin_et(karsi_taraf) if tur == GIDER else "Satış Geliri"
 
     aciklama = f"{karsi_taraf} - Fatura No: {veri.invoice_id}"
     if veri.invoice_type_code and veri.invoice_type_code != "SATIS":
@@ -321,3 +326,29 @@ def kaynagi_ice_aktar(
     if yol.suffix.lower() == ".xml":
         return [dosyayi_ice_aktar(conn, yol, varsayilan_tur, sirket_vkn)]
     raise ValueError(f"Desteklenmeyen dosya türü: {yol}")
+
+
+def efatura_kayitlarini_yeniden_siniflandir(conn: sqlite3.Connection, sirket_vkn: str) -> int:
+    """Şirket VKN'si sonradan girildiğinde/değiştiğinde, daha önce içe
+    aktarılmış e-fatura kayıtlarının yönünü (gelir/gider) günceller.
+
+    Geçmiş kayıtlarda faturanın hangi tarafının VKN'si tutulduğu bilgisi
+    saklanmaz (sadece karşı tarafın VKN'si tutulur); bu yüzden tam bir
+    yeniden ayrıştırma yapılamaz. Bunun yerine: "Gelen Fatura" olarak içe
+    aktarılmış (kaynak=efatura, tur=gider) kayıtlar — bu içe aktarma zaten
+    şirketimizin faturanın alıcı tarafında olduğu varsayımıyla yapıldığından
+    — güncel kuralımıza göre (VKN herhangi bir tarafta geçiyorsa gelir)
+    gelire çevrilir. Zaten gelir olan e-fatura kayıtlarına dokunulmaz.
+
+    `sirket_vkn` boşsa hiçbir şey yapmaz ve 0 döner.
+    """
+    sirket_vkn = (sirket_vkn or "").strip()
+    if not sirket_vkn:
+        return 0
+
+    guncellenen = 0
+    for islem in database.islemleri_listele(conn):
+        if islem.kaynak == KAYNAK_EFATURA and islem.tur == GIDER:
+            database.islem_guncelle(conn, islem.id, tur=GELIR, kategori="Satış Geliri")
+            guncellenen += 1
+    return guncellenen

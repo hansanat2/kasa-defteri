@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from kasa_defteri import database, efatura_import
-from kasa_defteri.models import GELIR, GIDER
+from kasa_defteri.models import GELIR, GIDER, Islem
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -117,11 +117,13 @@ def test_yonu_belirle_sirket_satici_ise_gelir():
     assert tur == GELIR
 
 
-def test_yonu_belirle_sirket_alici_ise_gider():
+def test_yonu_belirle_sirket_alici_ise_de_gelir():
+    # Kullanıcı tercihi: VKN alıcı tarafta da geçse fatura gelir sayılır
+    # (alıcı/satıcı ayrımı yapılmaz, sadece VKN eşleşmesi bakılır).
     veri = efatura_import.xml_dosyasini_ayristir(FIXTURES / "ornek_fatura_1.xml")
     # ornek_fatura_1.xml: customer_vkn = "9876543210"
-    tur = efatura_import.yonu_belirle(veri, GELIR, sirket_vkn="9876543210")
-    assert tur == GIDER
+    tur = efatura_import.yonu_belirle(veri, GIDER, sirket_vkn="9876543210")
+    assert tur == GELIR
 
 
 def test_yonu_belirle_eslesme_yoksa_varsayilana_duser():
@@ -157,7 +159,37 @@ def test_dosyayi_ice_aktar_ayarlardaki_sirket_vkn_kullanilir(conn):
     from kasa_defteri import reports
 
     reports.sirket_vkn_ayarla(conn, "9876543210")  # müşteri VKN'si
-    sonuc = efatura_import.dosyayi_ice_aktar(conn, FIXTURES / "ornek_fatura_1.xml", varsayilan_tur=GELIR)
+    sonuc = efatura_import.dosyayi_ice_aktar(conn, FIXTURES / "ornek_fatura_1.xml", varsayilan_tur=GIDER)
     assert sonuc.basarili
     kayitlar = database.islemleri_listele(conn)
-    assert kayitlar[0].tur == GIDER  # ayarlardaki VKN alıcı tarafla eşleşti
+    assert kayitlar[0].tur == GELIR  # ayarlardaki VKN alıcı tarafla eşleşti, yine de gelir sayılır
+    assert kayitlar[0].karsi_taraf == "ÖRNEK YAZILIM TEKNOLOJİLERİ A.Ş."  # karşı taraf satıcı kalır
+
+
+def test_efatura_kayitlarini_yeniden_siniflandir(conn):
+    # Önce VKN tanımlı değilken "gelen fatura" (gider) olarak içe aktar
+    efatura_import.dosyayi_ice_aktar(conn, FIXTURES / "ornek_fatura_1.xml", varsayilan_tur=GIDER, sirket_vkn="")
+    efatura_import.dosyayi_ice_aktar(conn, FIXTURES / "ornek_fatura_2.xml", varsayilan_tur=GIDER, sirket_vkn="")
+    database.islem_ekle(
+        conn, Islem(tarih="2024-01-01", tur=GIDER, tutar=50.0, kaynak="manuel")
+    )
+
+    kayitlar_once = database.islemleri_listele(conn)
+    assert all(k.tur == GIDER for k in kayitlar_once if k.kaynak == "efatura")
+
+    guncellenen = efatura_import.efatura_kayitlarini_yeniden_siniflandir(conn, "9876543210")
+    assert guncellenen == 2
+
+    kayitlar_sonra = database.islemleri_listele(conn)
+    efatura_kayitlari = [k for k in kayitlar_sonra if k.kaynak == "efatura"]
+    manuel_kayitlar = [k for k in kayitlar_sonra if k.kaynak == "manuel"]
+    assert all(k.tur == GELIR for k in efatura_kayitlari)
+    assert all(k.kategori == "Satış Geliri" for k in efatura_kayitlari)
+    assert manuel_kayitlar[0].tur == GIDER  # manuel kayıtlara dokunulmadı
+
+
+def test_efatura_kayitlarini_yeniden_siniflandir_vkn_bos_ise_hicbir_sey_yapmaz(conn):
+    efatura_import.dosyayi_ice_aktar(conn, FIXTURES / "ornek_fatura_1.xml", varsayilan_tur=GIDER, sirket_vkn="")
+    guncellenen = efatura_import.efatura_kayitlarini_yeniden_siniflandir(conn, "")
+    assert guncellenen == 0
+    assert database.islemleri_listele(conn)[0].tur == GIDER

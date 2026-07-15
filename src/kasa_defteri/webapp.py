@@ -216,6 +216,17 @@ def create_app(db_path: Optional[Path] = None) -> Flask:
             flash("Şirket VKN'si temizlendi. Yön artık yukarıda seçtiğiniz türe göre belirlenecek.", "success")
         return redirect(url_for("efatura"))
 
+    @app.route("/efatura/yeniden-siniflandir", methods=["POST"])
+    def efatura_yeniden_siniflandir():
+        conn = get_db()
+        sirket_vkn = reports.sirket_vkn_getir(conn)
+        if not sirket_vkn:
+            flash("Yeniden sınıflandırmadan önce şirket VKN'sini kaydedin.", "error")
+            return redirect(url_for("efatura"))
+        guncellenen = efatura_import.efatura_kayitlarini_yeniden_siniflandir(conn, sirket_vkn)
+        flash(f"{guncellenen} e-fatura kaydı gelire çevrildi.", "success")
+        return redirect(url_for("index"))
+
     # ------------------------------------------------------------------
     # Firmalar (e-fatura kaynaklı işlemlerin karşı tarafa göre dökümü)
     # ------------------------------------------------------------------

@@ -99,6 +99,14 @@ python main.py --db /baska/bir/yol/kasa.db
 kasa defterine ekler. Her faturanın `UUID`'si veritabanında benzersiz
 tutulur; aynı dosya tekrar içe aktarılmaya çalışılırsa atlanır.
 
+**Otomatik yön tespiti (şirket VKN'si):** E-Fatura sayfasında kendi
+şirketinizin VKN'sini kaydederseniz, yukarıdaki "Gelen/Giden Fatura" seçimi
+devre dışı kalır — VKN'niz faturanın herhangi bir tarafında (alıcı ya da
+satıcı) geçtiği sürece fatura otomatik olarak **gelir** sayılır. VKN'yi
+sonradan kaydettiyseniz, aynı sayfadaki "Mevcut e-fatura kayıtlarını bu
+VKN'ye göre yeniden sınıflandır" butonuyla önceden içe aktarılmış "Gelen
+Fatura" kayıtlarını da toplu olarak gelire çevirebilirsiniz.
+
 **Gizlilik uyarısı:** `.gitignore` dosyası, gerçek fatura XML'lerinizi ve
 oluşan `kasa.db` veritabanını (finansal veri içerdikleri için) repoya dahil
 etmeyecek şekilde ayarlanmıştır. Kendi faturalarınızı test etmek isterseniz

@@ -7,13 +7,12 @@
   <div class="card-body">
     <h6 class="card-title">Şirket Bilgisi (otomatik yön tespiti)</h6>
     <p class="text-muted small">
-      Kendi şirketinizin VKN'sini kaydederseniz, her faturanın satıcı/alıcı
-      tarafı otomatik kontrol edilir: şirketiniz satıcıysa fatura
-      <strong>gelir</strong>, alıcıysa <strong>gider</strong> olarak
-      kaydedilir — aşağıdaki "İçe aktarma türü" seçimi sadece eşleşme
-      olmadığında (VKN boşsa veya faturanın hiçbir tarafı uymuyorsa) kullanılır.
+      Kendi şirketinizin VKN'sini kaydederseniz, VKN'niz faturanın herhangi
+      bir tarafında (alıcı ya da satıcı) geçen tüm faturalar otomatik olarak
+      <strong>gelir</strong> kaydedilir. Aşağıdaki "İçe aktarma türü" seçimi
+      sadece VKN boşsa veya faturanın hiçbir tarafı uymuyorsa kullanılır.
     </p>
-    <form method="post" action="{{ url_for('sirket_bilgisi_ayarla') }}" class="row g-2 align-items-end">
+    <form method="post" action="{{ url_for('sirket_bilgisi_ayarla') }}" class="row g-2 align-items-end mb-3">
       <div class="col-auto">
         <label class="form-label mb-0">Şirketinizin VKN'si</label>
         <input type="text" class="form-control" name="sirket_vkn" value="{{ sirket_vkn }}" placeholder="Örn. 1234567890">
@@ -22,6 +21,18 @@
         <button type="submit" class="btn btn-outline-primary">Kaydet</button>
       </div>
     </form>
+
+    {% if sirket_vkn %}
+    <form method="post" action="{{ url_for('efatura_yeniden_siniflandir') }}"
+          onsubmit="return confirm('Daha önce gider olarak içe aktarılmış tüm e-fatura kayıtları gelire çevrilecek. Devam edilsin mi?');">
+      <button type="submit" class="btn btn-sm btn-outline-warning">
+        Mevcut e-fatura kayıtlarını bu VKN'ye göre yeniden sınıflandır
+      </button>
+      <span class="text-muted small d-block mt-1">
+        Şirket VKN'sini yeni kaydettiyseniz, daha önce içe aktarılmış "Gelen Fatura" kayıtlarını gelire çevirmek için kullanın.
+      </span>
+    </form>
+    {% endif %}
   </div>
 </div>
 
