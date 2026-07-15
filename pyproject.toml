@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 dependencies = [
+    "Flask>=3.0",
     "matplotlib>=3.7",
 ]
 
@@ -16,6 +17,7 @@ dev = [
 
 [project.scripts]
 kasa-defteri = "kasa_defteri.gui:main"
+kasa-defteri-web = "kasa_defteri.webapp:main"
 
 [build-system]
 requires = ["setuptools>=68"]

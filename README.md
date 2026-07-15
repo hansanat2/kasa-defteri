@@ -5,10 +5,19 @@ uygulaması. Gelir ve giderlerinizi kaydeder, kronolojik bakiye takibi yapar,
 aylık ve kategori bazlı raporlar üretir; ayrıca **GİB e-Fatura** (UBL-TR)
 XML dosyalarını otomatik olarak gider (veya gelir) kaydına dönüştürebilir.
 
-Şu an bir masaüstü GUI (Tkinter) olarak çalışır; alttaki katmanlar (veritabanı,
-raporlama, e-fatura ayrıştırıcı) arayüzden bağımsız olduğu için ileride bir
-web arayüzüne veya daha gelişmiş bir masaüstü uygulamasına (PySide/Qt,
-Electron+API vb.) taşınmaya uygun şekilde tasarlanmıştır.
+İki arayüzü vardır, ikisi de aynı veritabanını ve iş mantığını kullanır:
+
+- **Web arayüzü (önerilen)** — Flask ile, `python app.py` dedikten sonra
+  tarayıcıda `http://127.0.0.1:5000` adresinde açılır. Sadece kendi
+  bilgisayarınızda (localhost) çalışır, dışarıya açık değildir.
+- **Masaüstü arayüzü** — Tkinter ile, `python main.py` dedikten sonra ayrı
+  bir pencere açılır. (Not: bazı Mac/Linux kurulumlarında sistem Tk sürümü
+  eskiyse pencere boş/beyaz açılabilir; bu durumda web arayüzünü kullanmanız
+  önerilir.)
+
+Alttaki katmanlar (`database.py`, `reports.py`, `efatura_import.py`) her iki
+arayüzden de bağımsızdır — ileride farklı bir arayüze (örn. mobil, masaüstü
+paketleme) taşımak da kolaydır.
 
 ## Özellikler
 
@@ -16,8 +25,8 @@ Electron+API vb.) taşınmaya uygun şekilde tasarlanmıştır.
   o ana kadarki bakiyeyle birlikte listeler.
 - **Manuel gelir/gider girişi**: tarih, tutar, kategori, açıklama, karşı
   taraf ve belge no alanlarıyla.
-- **E-Fatura içe aktarma**: tek bir `.xml` dosyası, bir klasör veya GİB
-  portalından indirilen `.zip` paketi seçerek toplu içe aktarım yapılabilir.
+- **E-Fatura içe aktarma**: `.xml` dosyaları (tek veya çoklu seçim) ya da
+  GİB portalından indirilen `.zip` paketi ile toplu içe aktarım yapılabilir.
   Aynı fatura (UUID ile) birden fazla kez eklenmez.
 - **Otomatik kategori tahmini**: tedarikçi adına göre (ör. "...İLETİŞİM..."
   → İnternet/Telefon, "...YAZILIM..." → Yazılım/Abonelik) kaba bir
@@ -27,7 +36,8 @@ Electron+API vb.) taşınmaya uygun şekilde tasarlanmıştır.
 - **CSV dışa aktarım**: kasa defteri dökümünü Excel'de açılabilecek bir
   CSV dosyasına aktarır.
 - **SQLite veritabanı**: tek dosya, kurulum gerektirmez, kolayca
-  yedeklenebilir.
+  yedeklenebilir. Web ve masaüstü arayüzü aynı veritabanını
+  (`~/KasaDefteri/kasa.db`) paylaşır.
 
 ## Kurulum
 
@@ -39,7 +49,20 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Çalıştırma
+> macOS'ta Homebrew Python kullanıyorsanız ("externally-managed-environment"
+> hatası alırsanız) yukarıdaki venv adımları zaten bu sorunu çözer — venv
+> dışında `pip install` çalıştırmayın.
+
+## Çalıştırma — Web arayüzü (önerilen)
+
+```bash
+python app.py
+```
+
+Tarayıcı otomatik açılır (`http://127.0.0.1:5000`). Açılmazsa adresi elle
+girin. Durdurmak için terminalde Ctrl+C.
+
+## Çalıştırma — Masaüstü arayüzü
 
 ```bash
 python main.py
@@ -53,15 +76,16 @@ python main.py --db /baska/bir/yol/kasa.db
 ```
 
 > **Not:** Tkinter çoğu Python kurulumunda hazır gelir. Linux'ta eksikse
-> `sudo apt install python3-tk` ile kurabilirsiniz. macOS/Windows'ta
-> python.org kurulumlarında ekstra bir şey gerekmez.
+> `sudo apt install python3-tk` ile kurabilirsiniz. macOS'ta sistem Python'u
+> yerine güncel bir sürüm kullanmak isterseniz `brew install python-tk`
+> yardımcı olur. Yine de sorun yaşarsanız web arayüzüne geçin.
 
 ## E-Fatura içe aktarma nasıl çalışır?
 
-"E-Fatura İçe Aktar" sekmesinden bir `.xml` dosyası, `.xml` dosyaları içeren
-bir klasör ya da `.zip` arşivi seçebilirsiniz. Program her dosyadaki UBL-TR
-Invoice yapısını (`cbc:ID`, `cbc:UUID`, `cbc:IssueDate`,
-`cac:AccountingSupplierParty`, `cac:LegalMonetaryTotal` vb.) okuyup:
+"E-Fatura İçe Aktar" sayfasından bir veya birden fazla `.xml` dosyası ya da
+`.zip` arşivi seçebilirsiniz. Program her dosyadaki UBL-TR Invoice yapısını
+(`cbc:ID`, `cbc:UUID`, `cbc:IssueDate`, `cac:AccountingSupplierParty`,
+`cac:LegalMonetaryTotal` vb.) okuyup:
 
 1. **Gelen Fatura** modunda → tedarikçiyi karşı taraf, faturayı **gider**
    kaydı olarak,
@@ -81,19 +105,22 @@ edilmez.
 
 ```
 kasa-defteri/
-├── main.py                      # Uygulamayı başlatan giriş noktası
+├── app.py                        # Web arayüzü giriş noktası (önerilen)
+├── main.py                       # Masaüstü (Tkinter) giriş noktası
 ├── src/kasa_defteri/
-│   ├── models.py                 # Islem veri modeli
-│   ├── database.py               # SQLite şeması ve CRUD işlemleri
-│   ├── efatura_import.py         # UBL-TR e-fatura XML ayrıştırıcı
-│   ├── reports.py                # Gelir/gider analiz ve raporlama
-│   └── gui.py                    # Tkinter masaüstü arayüzü
-├── tests/                        # pytest test paketi (28 test)
-│   └── fixtures/                 # Sentetik örnek e-fatura XML'leri
+│   ├── models.py                  # Islem veri modeli
+│   ├── database.py                # SQLite şeması ve CRUD işlemleri
+│   ├── efatura_import.py          # UBL-TR e-fatura XML ayrıştırıcı
+│   ├── reports.py                 # Gelir/gider analiz ve raporlama
+│   ├── gui.py                     # Tkinter masaüstü arayüzü
+│   ├── webapp.py                  # Flask web arayüzü
+│   └── templates/                 # Web arayüzü HTML şablonları
+├── tests/                         # pytest test paketi (41 test)
+│   └── fixtures/                  # Sentetik örnek e-fatura XML'leri
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── pyproject.toml
-└── .github/workflows/tests.yml   # CI: her push'ta testleri çalıştırır
+└── .github/workflows/tests.yml    # CI: her push'ta testleri çalıştırır
 ```
 
 ## Veritabanı şeması (özet)
@@ -111,17 +138,18 @@ pytest -v
 ```
 
 Testler; veritabanı CRUD işlemlerini, e-fatura ayrıştırmayı (sentetik
-örnek XML'lerle), mükerrer fatura engellenmesini ve rapor hesaplamalarını
-(aylık özet, kategori kırılımı, bakiye taşıma mantığı) kapsar.
+örnek XML'lerle), mükerrer fatura engellenmesini, rapor hesaplamalarını
+(aylık özet, kategori kırılımı, bakiye taşıma mantığı) ve web arayüzünün
+tüm rotalarını (Flask test client ile) kapsar.
 
 ## Yol haritası
 
-- [ ] PyInstaller ile tek dosyalık `.exe` / `.app` paketleme
-- [ ] Daha gelişmiş bir masaüstü arayüzü (PySide6/Qt) veya web arayüzü
-      (aynı `database`/`reports`/`efatura_import` katmanları üzerinden)
+- [ ] PyInstaller ile masaüstü sürümü için tek dosyalık `.exe` / `.app` paketleme
+- [ ] Web arayüzünü Electron veya PyWebview ile masaüstü uygulamasına sarmalama
 - [ ] Excel (.xlsx) formatında dışa aktarım
 - [ ] Çoklu kasa/banka hesabı desteği
 - [ ] Fatura satır kalemlerinin (KDV oranı bazında) ayrı ayrı raporlanması
+- [ ] Kullanıcı girişi / kimlik doğrulama (web arayüzü ağ üzerinden paylaşılacaksa)
 
 ## Lisans
 

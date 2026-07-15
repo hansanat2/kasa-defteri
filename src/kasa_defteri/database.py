@@ -55,6 +55,17 @@ VARSAYILAN_KATEGORILER = [
 ]
 
 
+def varsayilan_db_yolu() -> Path:
+    """Kullanıcının ana dizininde uygulama verisi için klasör/dosya döner.
+
+    Hem masaüstü (Tkinter) hem de web (Flask) arayüzü aynı veritabanını
+    kullanabilsin diye burada tanımlanır.
+    """
+    klasor = Path.home() / "KasaDefteri"
+    klasor.mkdir(parents=True, exist_ok=True)
+    return klasor / "kasa.db"
+
+
 def get_connection(db_path: str | Path) -> sqlite3.Connection:
     """Verilen yoldaki SQLite veritabanına bağlanır (yoksa oluşturur)."""
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)

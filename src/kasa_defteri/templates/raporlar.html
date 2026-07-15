@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4 class="mb-3">Raporlar</h4>
+
+<form method="post" action="{{ url_for('acilis_bakiyesi_ayarla') }}" class="row g-2 align-items-end mb-4">
+  <div class="col-auto">
+    <label class="form-label mb-0">Açılış Bakiyesi (TL)</label>
+    <input type="text" class="form-control" name="acilis_bakiyesi" value="{{ '%.2f'|format(acilis_bakiyesi) }}">
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary">Kaydet</button>
+  </div>
+</form>
+
+<div class="row">
+  <div class="col-lg-6 mb-4">
+    <div class="card"><div class="card-body">
+      <h6 class="card-title">Aylık Gelir / Gider</h6>
+      {% if aylik %}
+      <canvas id="aylikGrafik" height="220"></canvas>
+      {% else %}
+      <p class="text-muted">Henüz veri yok.</p>
+      {% endif %}
+    </div></div>
+  </div>
+  <div class="col-lg-6 mb-4">
+    <div class="card"><div class="card-body">
+      <h6 class="card-title">Kategori Bazlı Gider Dağılımı</h6>
+      {% if kategori_gider %}
+      <canvas id="kategoriGrafik" height="220"></canvas>
+      {% else %}
+      <p class="text-muted">Henüz veri yok.</p>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  const aylikVeri = {{ aylik | tojson }};
+  const kategoriVeri = {{ kategori_gider | tojson }};
+
+  if (aylikVeri.length) {
+    new Chart(document.getElementById('aylikGrafik'), {
+      type: 'bar',
+      data: {
+        labels: aylikVeri.map(a => a.ay),
+        datasets: [
+          { label: 'Gelir', data: aylikVeri.map(a => a.gelir), backgroundColor: '#198754' },
+          { label: 'Gider', data: aylikVeri.map(a => a.gider), backgroundColor: '#dc3545' },
+        ]
+      },
+      options: { responsive: true }
+    });
+  }
+
+  if (kategoriVeri.length) {
+    new Chart(document.getElementById('kategoriGrafik'), {
+      type: 'pie',
+      data: {
+        labels: kategoriVeri.map(k => k.kategori),
+        datasets: [{ data: kategoriVeri.map(k => k.toplam) }]
+      },
+      options: { responsive: true }
+    });
+  }
+</script>
+
+{% endblock %}

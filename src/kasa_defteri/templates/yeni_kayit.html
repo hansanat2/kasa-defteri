@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4 class="mb-3">Yeni Kayıt</h4>
+
+<form method="post" class="row g-3" style="max-width: 640px;" id="yeni-kayit-form">
+  <div class="col-md-6">
+    <label class="form-label">Tarih</label>
+    <input type="date" class="form-control" name="tarih" value="{{ form.get('tarih', bugun) }}" required>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label d-block">Tür</label>
+    <div class="btn-group" role="group">
+      <input type="radio" class="btn-check" name="tur" id="tur-gider" value="gider" autocomplete="off" {{ 'checked' if form.get('tur', 'gider') == 'gider' else '' }}>
+      <label class="btn btn-outline-danger" for="tur-gider">Gider</label>
+
+      <input type="radio" class="btn-check" name="tur" id="tur-gelir" value="gelir" autocomplete="off" {{ 'checked' if form.get('tur') == 'gelir' else '' }}>
+      <label class="btn btn-outline-success" for="tur-gelir">Gelir</label>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Tutar (TL)</label>
+    <input type="text" class="form-control" name="tutar" value="{{ form.get('tutar', '') }}" placeholder="Örn. 150,00" required>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Kategori</label>
+    <select class="form-select" name="kategori" id="kategori-secim">
+      <optgroup label="Gider kategorileri" id="grup-gider">
+        {% for k in gider_kategorileri %}
+        <option value="{{ k }}">{{ k }}</option>
+        {% endfor %}
+      </optgroup>
+      <optgroup label="Gelir kategorileri" id="grup-gelir" hidden>
+        {% for k in gelir_kategorileri %}
+        <option value="{{ k }}">{{ k }}</option>
+        {% endfor %}
+      </optgroup>
+    </select>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Yeni kategori (isteğe bağlı)</label>
+    <input type="text" class="form-control" name="yeni_kategori" placeholder="Boş bırakırsanız yukarıdaki kullanılır">
+  </div>
+
+  <div class="col-12">
+    <label class="form-label">Açıklama</label>
+    <input type="text" class="form-control" name="aciklama" value="{{ form.get('aciklama', '') }}">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Karşı Taraf</label>
+    <input type="text" class="form-control" name="karsi_taraf" value="{{ form.get('karsi_taraf', '') }}">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Belge No</label>
+    <input type="text" class="form-control" name="belge_no" value="{{ form.get('belge_no', '') }}">
+  </div>
+
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Kaydet</button>
+  </div>
+</form>
+
+<script>
+  // Tür seçimine göre gösterilen kategori grubunu değiştir
+  const giderRadyo = document.getElementById('tur-gider');
+  const gelirRadyo = document.getElementById('tur-gelir');
+  const grupGider = document.getElementById('grup-gider');
+  const grupGelir = document.getElementById('grup-gelir');
+
+  function kategoriGrubunuGuncelle() {
+    const gelirSecili = gelirRadyo.checked;
+    grupGider.hidden = gelirSecili;
+    grupGelir.hidden = !gelirSecili;
+  }
+  giderRadyo.addEventListener('change', kategoriGrubunuGuncelle);
+  gelirRadyo.addEventListener('change', kategoriGrubunuGuncelle);
+  kategoriGrubunuGuncelle();
+</script>
+
+{% endblock %}

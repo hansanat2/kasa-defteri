@@ -7,6 +7,7 @@ uçlar dahildir (>= baslangic, <= bitis).
 from __future__ import annotations
 
 import csv
+import io
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -126,14 +127,14 @@ def kasa_defteri_dokumu(
     return sonuc
 
 
-def csv_olarak_disa_aktar(
-    conn: sqlite3.Connection,
-    dosya_yolu: str | Path,
-    baslangic: Optional[str] = None,
-    bitis: Optional[str] = None,
-) -> Path:
-    """Kasa defteri dökümünü CSV dosyasına yazar (Excel'de açılabilir)."""
-    dosya_yolu = Path(dosya_yolu)
+def csv_icerigi_uret(
+    conn: sqlite3.Connection, baslangic: Optional[str] = None, bitis: Optional[str] = None
+) -> str:
+    """Kasa defteri dökümünü CSV metni olarak üretir (dosyaya yazmadan).
+
+    Hem masaüstü uygulaması hem de web arayüzü bu fonksiyonu kullanır;
+    masaüstü diske yazar, web arayüzü doğrudan indirme yanıtı olarak döner.
+    """
     satirlar = kasa_defteri_dokumu(conn, baslangic, bitis)
     basliklar = [
         "Tarih",
@@ -146,21 +147,35 @@ def csv_olarak_disa_aktar(
         "Bakiye",
         "Kaynak",
     ]
-    with open(dosya_yolu, "w", newline="", encoding="utf-8-sig") as f:
-        yazici = csv.writer(f, delimiter=";")
-        yazici.writerow(basliklar)
-        for s in satirlar:
-            yazici.writerow(
-                [
-                    s["tarih"],
-                    s["aciklama"],
-                    s["kategori"],
-                    s["karsi_taraf"],
-                    s["belge_no"],
-                    f"{s['gelir']:.2f}",
-                    f"{s['gider']:.2f}",
-                    f"{s['bakiye']:.2f}",
-                    s["kaynak"],
-                ]
-            )
+    arabellek = io.StringIO()
+    yazici = csv.writer(arabellek, delimiter=";")
+    yazici.writerow(basliklar)
+    for s in satirlar:
+        yazici.writerow(
+            [
+                s["tarih"],
+                s["aciklama"],
+                s["kategori"],
+                s["karsi_taraf"],
+                s["belge_no"],
+                f"{s['gelir']:.2f}",
+                f"{s['gider']:.2f}",
+                f"{s['bakiye']:.2f}",
+                s["kaynak"],
+            ]
+        )
+    return "﻿" + arabellek.getvalue()  # başına BOM: Excel Türkçe karakterleri doğru okur
+
+
+def csv_olarak_disa_aktar(
+    conn: sqlite3.Connection,
+    dosya_yolu: str | Path,
+    baslangic: Optional[str] = None,
+    bitis: Optional[str] = None,
+) -> Path:
+    """Kasa defteri dökümünü CSV dosyasına yazar (Excel'de açılabilir)."""
+    dosya_yolu = Path(dosya_yolu)
+    icerik = csv_icerigi_uret(conn, baslangic, bitis)
+    with open(dosya_yolu, "w", newline="", encoding="utf-8") as f:
+        f.write(icerik)
     return dosya_yolu

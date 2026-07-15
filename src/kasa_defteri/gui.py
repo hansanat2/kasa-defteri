@@ -17,14 +17,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import database, efatura_import, reports
+from .database import varsayilan_db_yolu
 from .models import GELIR, GIDER, Islem
-
-
-def varsayilan_db_yolu() -> Path:
-    """Kullanıcının ana dizininde uygulama verisi için klasör/dosya döner."""
-    klasor = Path.home() / "KasaDefteri"
-    klasor.mkdir(parents=True, exist_ok=True)
-    return klasor / "kasa.db"
 
 
 def tl_formatla(tutar: float) -> str:

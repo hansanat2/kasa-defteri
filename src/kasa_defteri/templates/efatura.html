@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4 class="mb-3">E-Fatura İçe Aktar</h4>
+
+<p class="text-muted">
+  GİB e-Fatura portalından indirilen UBL-TR formatındaki <code>.xml</code> dosyalarını
+  (birden fazla dosya seçebilirsiniz) ya da bir <code>.zip</code> arşivini yükleyerek
+  kasa defterine otomatik olarak aktarabilirsiniz. Daha önce aktarılmış faturalar
+  (UUID ile) tekrar eklenmez.
+</p>
+
+<form method="post" enctype="multipart/form-data" class="mb-4" style="max-width: 640px;">
+  <div class="mb-3">
+    <label class="form-label d-block">İçe aktarma türü</label>
+    <div class="btn-group" role="group">
+      <input type="radio" class="btn-check" name="tur" id="tur-gider" value="gider" autocomplete="off" checked>
+      <label class="btn btn-outline-danger" for="tur-gider">Gelen Fatura (Gider olarak ekle)</label>
+
+      <input type="radio" class="btn-check" name="tur" id="tur-gelir" value="gelir" autocomplete="off">
+      <label class="btn btn-outline-success" for="tur-gelir">Giden Fatura (Gelir olarak ekle)</label>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Dosyalar (.xml veya .zip, birden fazla seçilebilir)</label>
+    <input type="file" class="form-control" name="dosyalar" accept=".xml,.zip" multiple required>
+  </div>
+
+  <button type="submit" class="btn btn-primary">İçe Aktar</button>
+</form>
+
+{% if sonuclar %}
+<h5>Sonuçlar</h5>
+<ul class="list-group mb-3">
+  {% for s in sonuclar %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    <span>{{ s.dosya_adi }} &mdash; {{ s.mesaj }}</span>
+    <span class="badge {{ 'bg-success' if s.basarili else 'bg-secondary' }} rounded-pill">
+      {{ 'aktarıldı' if s.basarili else 'atlandı' }}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+<a href="{{ url_for('index') }}" class="btn btn-outline-primary">Kasa Defterine Git</a>
+{% endif %}
+
+{% endblock %}
