@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# Uygulama verileri (gercek finansal veri iceren dosyalar repoya girmemeli)
+*.db
+*.sqlite3
+/data/
+/gelen_faturalar/
+!/data/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
