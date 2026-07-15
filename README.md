@@ -31,6 +31,10 @@ paketleme) taşımak da kolaydır.
 - **Otomatik kategori tahmini**: tedarikçi adına göre (ör. "...İLETİŞİM..."
   → İnternet/Telefon, "...YAZILIM..." → Yazılım/Abonelik) kaba bir
   kategorilendirme yapılır; kullanıcı istediği zaman değiştirebilir.
+- **Firmalar**: e-fatura ile içe aktarılan giderleri faturayı kesen firmaya
+  göre gruplar; en fazla fatura oluşturan ve en çok harcama yapılan
+  firmaları gösteren bir dashboard içerir, her firmanın altına tıklayınca
+  o firmaya ait tüm faturalar açılır.
 - **Raporlar**: aylık gelir/gider grafiği, kategori bazlı gider dağılımı
   (pasta grafik), açılış bakiyesi ayarı.
 - **CSV dışa aktarım**: kasa defteri dökümünü Excel'de açılabilecek bir
@@ -150,6 +154,7 @@ tüm rotalarını (Flask test client ile) kapsar.
 - [ ] Çoklu kasa/banka hesabı desteği
 - [ ] Fatura satır kalemlerinin (KDV oranı bazında) ayrı ayrı raporlanması
 - [ ] Kullanıcı girişi / kimlik doğrulama (web arayüzü ağ üzerinden paylaşılacaksa)
+- [ ] E-fatura dışındaki veri kaynaklarının (banka ekstresi, POS raporu vb.) içe aktarılması
 
 ## Lisans
 

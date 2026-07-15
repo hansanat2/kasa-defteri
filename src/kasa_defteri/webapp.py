@@ -203,6 +203,31 @@ def create_app(db_path: Optional[Path] = None) -> Flask:
         return render_template("efatura.html", sonuclar=sonuclar)
 
     # ------------------------------------------------------------------
+    # Firmalar (e-fatura kaynaklı işlemlerin karşı tarafa göre dökümü)
+    # ------------------------------------------------------------------
+    @app.route("/firmalar")
+    def firmalar():
+        conn = get_db()
+        baslangic = request.args.get("baslangic") or None
+        bitis = request.args.get("bitis") or None
+
+        ozet = reports.tedarikci_bazli_ozet(conn, GIDER, "efatura", baslangic, bitis)
+        detaylar = {
+            firma["karsi_taraf"]: reports.tedarikci_islemleri(
+                conn, firma["karsi_taraf"], GIDER, "efatura", baslangic, bitis
+            )
+            for firma in ozet
+        }
+
+        return render_template(
+            "firmalar.html",
+            ozet=ozet,
+            detaylar=detaylar,
+            baslangic=baslangic or "",
+            bitis=bitis or "",
+        )
+
+    # ------------------------------------------------------------------
     # Raporlar
     # ------------------------------------------------------------------
     @app.route("/raporlar")

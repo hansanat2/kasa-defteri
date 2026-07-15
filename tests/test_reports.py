@@ -1,9 +1,24 @@
 from kasa_defteri import database, reports
-from kasa_defteri.models import GELIR, GIDER, Islem
+from kasa_defteri.models import GELIR, GIDER, KAYNAK_EFATURA, KAYNAK_MANUEL, Islem
 
 
 def _ekle(conn, tarih, tur, tutar, kategori=""):
     database.islem_ekle(conn, Islem(tarih=tarih, tur=tur, tutar=tutar, kategori=kategori))
+
+
+def _efatura_ekle(conn, tarih, tutar, karsi_taraf, vkn_tckn="", uuid=None, tur=GIDER):
+    database.islem_ekle(
+        conn,
+        Islem(
+            tarih=tarih,
+            tur=tur,
+            tutar=tutar,
+            karsi_taraf=karsi_taraf,
+            vkn_tckn=vkn_tckn,
+            kaynak=KAYNAK_EFATURA,
+            efatura_uuid=uuid or f"uuid-{tarih}-{karsi_taraf}-{tutar}",
+        ),
+    )
 
 
 def test_toplam_gelir_ve_gider(conn):
@@ -90,3 +105,53 @@ def test_csv_disa_aktar(conn, tmp_path):
     assert "Tarih;Açıklama" in icerik
     assert "100.00" in icerik
     assert "40.00" in icerik
+
+
+def test_tedarikci_bazli_ozet_gruplar_ve_toplar(conn):
+    _efatura_ekle(conn, "2024-01-01", 100.0, "Firma A", vkn_tckn="111")
+    _efatura_ekle(conn, "2024-01-15", 150.0, "Firma A", vkn_tckn="111")
+    _efatura_ekle(conn, "2024-02-01", 50.0, "Firma B", vkn_tckn="222")
+
+    ozet = reports.tedarikci_bazli_ozet(conn)
+    assert len(ozet) == 2
+
+    firma_a = next(f for f in ozet if f["karsi_taraf"] == "Firma A")
+    assert firma_a["adet"] == 2
+    assert firma_a["toplam"] == 250.0
+    assert firma_a["ortalama"] == 125.0
+    assert firma_a["vkn_tckn"] == "111"
+    assert firma_a["ilk_tarih"] == "2024-01-01"
+    assert firma_a["son_tarih"] == "2024-01-15"
+
+
+def test_tedarikci_bazli_ozet_fatura_adedine_gore_siralanir(conn):
+    _efatura_ekle(conn, "2024-01-01", 500.0, "Az Fatura Çok Tutar")
+    _efatura_ekle(conn, "2024-01-01", 10.0, "Çok Fatura Az Tutar", uuid="u1")
+    _efatura_ekle(conn, "2024-01-02", 10.0, "Çok Fatura Az Tutar", uuid="u2")
+    _efatura_ekle(conn, "2024-01-03", 10.0, "Çok Fatura Az Tutar", uuid="u3")
+
+    ozet = reports.tedarikci_bazli_ozet(conn)
+    assert ozet[0]["karsi_taraf"] == "Çok Fatura Az Tutar"
+    assert ozet[0]["adet"] == 3
+
+
+def test_tedarikci_bazli_ozet_sadece_efatura_kaynaklilari_kapsar(conn):
+    _efatura_ekle(conn, "2024-01-01", 100.0, "E-Fatura Firması")
+    database.islem_ekle(
+        conn,
+        Islem(tarih="2024-01-01", tur=GIDER, tutar=999.0, karsi_taraf="Manuel Girilen", kaynak=KAYNAK_MANUEL),
+    )
+
+    ozet = reports.tedarikci_bazli_ozet(conn)
+    isimler = [f["karsi_taraf"] for f in ozet]
+    assert "E-Fatura Firması" in isimler
+    assert "Manuel Girilen" not in isimler
+
+
+def test_tedarikci_islemleri_dogru_firmayi_filtreler(conn):
+    _efatura_ekle(conn, "2024-01-01", 100.0, "Firma A", uuid="u1")
+    _efatura_ekle(conn, "2024-01-02", 200.0, "Firma B", uuid="u2")
+
+    islemler = reports.tedarikci_islemleri(conn, "Firma A")
+    assert len(islemler) == 1
+    assert islemler[0].tutar == 100.0

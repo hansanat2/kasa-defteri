@@ -144,6 +144,28 @@ def test_csv_disa_aktar(tmp_path):
     assert b"500.00" in resp.data
 
 
+def test_firmalar_sayfasi_acilir(tmp_path):
+    client = _client(tmp_path)
+    resp = client.get("/firmalar")
+    assert resp.status_code == 200
+    assert "Henüz e-fatura".encode() in resp.data
+
+
+def test_firmalar_sayfasi_efatura_sonrasi_gruplar(tmp_path):
+    client = _client(tmp_path)
+    with open(FIXTURES / "ornek_fatura_1.xml", "rb") as f:
+        client.post(
+            "/efatura",
+            data={"tur": "gider", "dosyalar": (f, "ornek_fatura_1.xml")},
+            content_type="multipart/form-data",
+        )
+    resp = client.get("/firmalar")
+    assert resp.status_code == 200
+    # ornek_fatura_1.xml tedarikçisi: "ÖRNEK YAZILIM TEKNOLOJİLERİ A.Ş."
+    assert "ÖRNEK YAZILIM".encode() in resp.data
+    assert "En Fazla Fatura Oluşturan Firmalar".encode() in resp.data
+
+
 def test_tarih_filtresi_calisir(tmp_path):
     client = _client(tmp_path)
     client.post(

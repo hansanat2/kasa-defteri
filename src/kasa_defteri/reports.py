@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import database
-from .models import GELIR, GIDER
+from .models import GELIR, GIDER, KAYNAK_EFATURA
 
 ACILIS_BAKIYESI_ANAHTARI = "acilis_bakiyesi"
 
@@ -89,6 +89,72 @@ def kategori_bazli_ozet(
     sonuc = [{"kategori": k, "toplam": round(v, 2)} for k, v in kategoriler.items()]
     sonuc.sort(key=lambda x: x["toplam"], reverse=True)
     return sonuc
+
+
+def tedarikci_bazli_ozet(
+    conn: sqlite3.Connection,
+    tur: str = GIDER,
+    kaynak: Optional[str] = KAYNAK_EFATURA,
+    baslangic: Optional[str] = None,
+    bitis: Optional[str] = None,
+) -> list[dict]:
+    """Karşı tarafa (firma) göre fatura adedi ve toplam tutar döner.
+
+    Varsayılan olarak sadece e-fatura kaynaklı kayıtları gruplar — hangi
+    firmaların en çok fatura kestiğini / en çok gider oluşturduğunu görmek
+    için kullanılır. `kaynak=None` verilirse manuel kayıtlar da dahil edilir.
+    Fatura adedine, eşitlik durumunda toplam tutara göre büyükten küçüğe
+    sıralanır.
+    """
+    islemler = database.islemleri_listele(conn, baslangic, bitis, tur=tur)
+    if kaynak:
+        islemler = [i for i in islemler if i.kaynak == kaynak]
+
+    firmalar: dict[str, dict] = {}
+    for i in islemler:
+        ad = i.karsi_taraf or "Bilinmeyen"
+        if ad not in firmalar:
+            firmalar[ad] = {
+                "karsi_taraf": ad,
+                "vkn_tckn": i.vkn_tckn,
+                "adet": 0,
+                "toplam": 0.0,
+                "ilk_tarih": i.tarih,
+                "son_tarih": i.tarih,
+            }
+        kayit = firmalar[ad]
+        kayit["adet"] += 1
+        kayit["toplam"] += i.tutar
+        if not kayit["vkn_tckn"] and i.vkn_tckn:
+            kayit["vkn_tckn"] = i.vkn_tckn
+        kayit["ilk_tarih"] = min(kayit["ilk_tarih"], i.tarih)
+        kayit["son_tarih"] = max(kayit["son_tarih"], i.tarih)
+
+    sonuc = []
+    for firma in firmalar.values():
+        firma["toplam"] = round(firma["toplam"], 2)
+        firma["ortalama"] = round(firma["toplam"] / firma["adet"], 2) if firma["adet"] else 0.0
+        sonuc.append(firma)
+
+    sonuc.sort(key=lambda x: (x["adet"], x["toplam"]), reverse=True)
+    return sonuc
+
+
+def tedarikci_islemleri(
+    conn: sqlite3.Connection,
+    karsi_taraf: str,
+    tur: str = GIDER,
+    kaynak: Optional[str] = KAYNAK_EFATURA,
+    baslangic: Optional[str] = None,
+    bitis: Optional[str] = None,
+):
+    """Belirli bir firmaya ait tüm işlemleri (fatura detaylarını) döner."""
+    islemler = database.islemleri_listele(conn, baslangic, bitis, tur=tur)
+    return [
+        i
+        for i in islemler
+        if (i.karsi_taraf or "Bilinmeyen") == karsi_taraf and (not kaynak or i.kaynak == kaynak)
+    ]
 
 
 def kasa_defteri_dokumu(

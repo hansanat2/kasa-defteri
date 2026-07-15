@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4 class="mb-3">Firmalar</h4>
+<p class="text-muted">
+  E-fatura ile içe aktarılan gider kayıtlarının, faturayı kesen firmaya göre
+  dökümü. Hangi tedarikçilerin en çok fatura kestiğini ve gider
+  kalemlerinizin en büyük payını hangi firmaların oluşturduğunu buradan
+  görebilirsiniz.
+</p>
+
+<form class="row g-2 align-items-end mb-4" method="get">
+  <div class="col-auto">
+    <label class="form-label mb-0">Başlangıç</label>
+    <input type="date" class="form-control" name="baslangic" value="{{ baslangic }}">
+  </div>
+  <div class="col-auto">
+    <label class="form-label mb-0">Bitiş</label>
+    <input type="date" class="form-control" name="bitis" value="{{ bitis }}">
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary">Filtrele</button>
+    <a href="{{ url_for('firmalar') }}" class="btn btn-outline-secondary">Temizle</a>
+  </div>
+</form>
+
+{% if ozet %}
+<div class="row mb-4">
+  <div class="col-lg-6 mb-4">
+    <div class="card"><div class="card-body">
+      <h6 class="card-title">En Fazla Fatura Oluşturan Firmalar</h6>
+      <canvas id="adetGrafik" height="220"></canvas>
+    </div></div>
+  </div>
+  <div class="col-lg-6 mb-4">
+    <div class="card"><div class="card-body">
+      <h6 class="card-title">En Çok Harcama Yapılan Firmalar</h6>
+      <canvas id="tutarGrafik" height="220"></canvas>
+    </div></div>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white align-middle">
+    <thead class="table-light">
+      <tr>
+        <th></th>
+        <th>Firma</th>
+        <th>VKN/TCKN</th>
+        <th class="text-end">Fatura Adedi</th>
+        <th class="text-end">Toplam</th>
+        <th class="text-end">Ortalama</th>
+        <th>İlk Fatura</th>
+        <th>Son Fatura</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in ozet %}
+      <tr role="button" data-bs-toggle="collapse" data-bs-target="#detay-{{ loop.index }}" class="align-middle">
+        <td class="text-muted">▸</td>
+        <td class="fw-semibold">{{ f.karsi_taraf }}</td>
+        <td>{{ f.vkn_tckn }}</td>
+        <td class="text-end">{{ f.adet }}</td>
+        <td class="text-end text-danger">{{ f.toplam | tl }}</td>
+        <td class="text-end">{{ f.ortalama | tl }}</td>
+        <td>{{ f.ilk_tarih }}</td>
+        <td>{{ f.son_tarih }}</td>
+      </tr>
+      <tr class="collapse" id="detay-{{ loop.index }}">
+        <td></td>
+        <td colspan="7" class="p-0">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr class="table-light">
+                <th>Tarih</th>
+                <th>Belge No</th>
+                <th>Açıklama</th>
+                <th class="text-end">Tutar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for islem in detaylar[f.karsi_taraf] %}
+              <tr>
+                <td>{{ islem.tarih }}</td>
+                <td>{{ islem.belge_no }}</td>
+                <td>{{ islem.aciklama }}</td>
+                <td class="text-end">{{ islem.tutar | tl }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  const ozetVeri = {{ ozet | tojson }};
+  const ilkOn = ozetVeri.slice(0, 10);
+
+  new Chart(document.getElementById('adetGrafik'), {
+    type: 'bar',
+    data: {
+      labels: ilkOn.map(f => f.karsi_taraf),
+      datasets: [{ label: 'Fatura Adedi', data: ilkOn.map(f => f.adet), backgroundColor: '#0d6efd' }]
+    },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+  });
+
+  const tutaraGoreSirali = [...ozetVeri].sort((a, b) => b.toplam - a.toplam).slice(0, 10);
+  new Chart(document.getElementById('tutarGrafik'), {
+    type: 'bar',
+    data: {
+      labels: tutaraGoreSirali.map(f => f.karsi_taraf),
+      datasets: [{ label: 'Toplam Tutar (TL)', data: tutaraGoreSirali.map(f => f.toplam), backgroundColor: '#dc3545' }]
+    },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+  });
+</script>
+
+{% else %}
+<p class="text-muted">Henüz e-fatura ile içe aktarılmış gider kaydı yok. "E-Fatura İçe Aktar" sayfasından başlayabilirsiniz.</p>
+{% endif %}
+
+{% endblock %}
