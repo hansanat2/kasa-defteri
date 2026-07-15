@@ -7,9 +7,12 @@ Desteklenen kaynaklar:
 - .xml dosyaları içeren bir .zip arşivi (GİB portalından indirilen
   "Gelen Fatura" paketleri genelde bu formattadır)
 
-Not: Bu modül sadece "gelen fatura" (satın alma / gider) senaryosunu
-hedefler. Aynı ayrıştırıcı mantığıyla "giden fatura" (satış / gelir)
-dosyaları da okunabilir; bunun için `varsayilan_tur="gelir"` verilebilir.
+Yön (gelir/gider) tespiti: Ayarlarda bir "şirket VKN"si tanımlıysa, her
+faturanın satıcı ve alıcı VKN'leri bu değerle karşılaştırılır — şirketimiz
+satıcı tarafındaysa (biz kestiysek) fatura **gelir**, alıcı tarafındaysa
+(bize kesildiyse) fatura **gider** olarak otomatik kaydedilir. Şirket VKN'si
+tanımlı değilse veya faturanın hiçbir tarafı eşleşmiyorsa, çağıranın verdiği
+`varsayilan_tur` kullanılır (elle seçilen "Gelen Fatura" / "Giden Fatura").
 """
 
 from __future__ import annotations
@@ -22,8 +25,8 @@ from pathlib import Path
 from typing import Optional
 from xml.etree import ElementTree as ET
 
-from . import database
-from .models import GIDER, KAYNAK_EFATURA, Islem
+from . import database, reports
+from .models import GELIR, GIDER, KAYNAK_EFATURA, Islem
 
 NS = {
     "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
@@ -165,17 +168,34 @@ def _kategori_tahmin_et(taraf_adi: str) -> str:
     return "Diğer Gider"
 
 
+def yonu_belirle(veri: EFaturaVerisi, varsayilan_tur: str, sirket_vkn: str = "") -> str:
+    """Faturanın gelir mi gider mi olduğuna karar verir.
+
+    Şirket VKN'si tanımlıysa ve faturanın taraflarından biriyle eşleşiyorsa
+    otomatik belirlenir: şirketimiz satıcıysa gelir, alıcıysa gider.
+    Eşleşme yoksa (veya VKN tanımlı değilse) `varsayilan_tur` kullanılır.
+    """
+    sirket_vkn = (sirket_vkn or "").strip()
+    if sirket_vkn:
+        if veri.supplier_vkn and veri.supplier_vkn == sirket_vkn:
+            return GELIR
+        if veri.customer_vkn and veri.customer_vkn == sirket_vkn:
+            return GIDER
+    return varsayilan_tur
+
+
 def efatura_verisinden_islem_olustur(
-    veri: EFaturaVerisi, varsayilan_tur: str = GIDER
+    veri: EFaturaVerisi, varsayilan_tur: str = GIDER, sirket_vkn: str = ""
 ) -> Islem:
     """Ayrıştırılmış e-fatura verisinden bir Islem (kasa defteri kaydı) üretir.
 
-    varsayilan_tur="gider" -> gelen fatura (satın alma) senaryosu: karşı
-    taraf tedarikçidir, kategori tedarikçi adına göre tahmin edilir.
-    varsayilan_tur="gelir" -> giden fatura (satış) senaryosu: karşı taraf
-    müşteridir.
+    Yön (gelir/gider) `yonu_belirle` ile tespit edilir: `sirket_vkn`
+    faturanın satıcı tarafıyla eşleşirse gelir, alıcı tarafıyla eşleşirse
+    gider olur; eşleşme yoksa `varsayilan_tur` (elle seçilen yön) kullanılır.
     """
-    if varsayilan_tur == GIDER:
+    tur = yonu_belirle(veri, varsayilan_tur, sirket_vkn)
+
+    if tur == GIDER:
         karsi_taraf = veri.supplier_name
         vkn = veri.supplier_vkn
         kategori = _kategori_tahmin_et(veri.supplier_name)
@@ -192,7 +212,7 @@ def efatura_verisinden_islem_olustur(
 
     return Islem(
         tarih=veri.issue_date,
-        tur=varsayilan_tur,
+        tur=tur,
         tutar=tutar,
         kategori=kategori,
         aciklama=aciklama,
@@ -213,10 +233,20 @@ class IceAktarmaSonucu:
 
 
 def dosyayi_ice_aktar(
-    conn: sqlite3.Connection, dosya_yolu: str | Path, varsayilan_tur: str = GIDER
+    conn: sqlite3.Connection,
+    dosya_yolu: str | Path,
+    varsayilan_tur: str = GIDER,
+    sirket_vkn: Optional[str] = None,
 ) -> IceAktarmaSonucu:
-    """Tek bir e-fatura XML dosyasını veritabanına kaydeder."""
+    """Tek bir e-fatura XML dosyasını veritabanına kaydeder.
+
+    `sirket_vkn` verilmezse (None), ayarlarda kayıtlı şirket VKN'si
+    kullanılır (bkz. `yonu_belirle`).
+    """
     dosya_yolu = Path(dosya_yolu)
+    if sirket_vkn is None:
+        sirket_vkn = reports.sirket_vkn_getir(conn)
+
     try:
         veri = xml_dosyasini_ayristir(dosya_yolu)
     except EFaturaAyristirmaHatasi as exc:
@@ -227,48 +257,67 @@ def dosyayi_ice_aktar(
             dosya_yolu.name, False, "Bu fatura zaten daha önce içe aktarılmış"
         )
 
-    islem = efatura_verisinden_islem_olustur(veri, varsayilan_tur)
+    islem = efatura_verisinden_islem_olustur(veri, varsayilan_tur, sirket_vkn)
     islem_id = database.islem_ekle(conn, islem)
     if islem_id is None:
         return IceAktarmaSonucu(
             dosya_yolu.name, False, "Bu fatura zaten daha önce içe aktarılmış"
         )
+    yon_etiketi = "gelir" if islem.tur == GELIR else "gider"
     return IceAktarmaSonucu(
-        dosya_yolu.name, True, f"Aktarıldı: {islem.karsi_taraf} - {islem.tutar} TRY", islem_id
+        dosya_yolu.name,
+        True,
+        f"Aktarıldı ({yon_etiketi}): {islem.karsi_taraf} - {islem.tutar} TRY",
+        islem_id,
     )
 
 
 def klasoru_ice_aktar(
-    conn: sqlite3.Connection, klasor_yolu: str | Path, varsayilan_tur: str = GIDER
+    conn: sqlite3.Connection,
+    klasor_yolu: str | Path,
+    varsayilan_tur: str = GIDER,
+    sirket_vkn: Optional[str] = None,
 ) -> list[IceAktarmaSonucu]:
     """Klasördeki (ve alt klasörlerdeki) tüm .xml dosyalarını içe aktarır."""
+    if sirket_vkn is None:
+        sirket_vkn = reports.sirket_vkn_getir(conn)
     klasor_yolu = Path(klasor_yolu)
     sonuclar = []
     for xml_dosyasi in sorted(klasor_yolu.rglob("*.xml")):
-        sonuclar.append(dosyayi_ice_aktar(conn, xml_dosyasi, varsayilan_tur))
+        sonuclar.append(dosyayi_ice_aktar(conn, xml_dosyasi, varsayilan_tur, sirket_vkn))
     return sonuclar
 
 
 def zip_ice_aktar(
-    conn: sqlite3.Connection, zip_yolu: str | Path, varsayilan_tur: str = GIDER
+    conn: sqlite3.Connection,
+    zip_yolu: str | Path,
+    varsayilan_tur: str = GIDER,
+    sirket_vkn: Optional[str] = None,
 ) -> list[IceAktarmaSonucu]:
     """Bir .zip arşivini geçici bir klasöre açıp içindeki tüm .xml
     dosyalarını içe aktarır."""
+    if sirket_vkn is None:
+        sirket_vkn = reports.sirket_vkn_getir(conn)
     with tempfile.TemporaryDirectory() as gecici_klasor:
         with zipfile.ZipFile(zip_yolu) as z:
             z.extractall(gecici_klasor)
-        return klasoru_ice_aktar(conn, gecici_klasor, varsayilan_tur)
+        return klasoru_ice_aktar(conn, gecici_klasor, varsayilan_tur, sirket_vkn)
 
 
 def kaynagi_ice_aktar(
-    conn: sqlite3.Connection, yol: str | Path, varsayilan_tur: str = GIDER
+    conn: sqlite3.Connection,
+    yol: str | Path,
+    varsayilan_tur: str = GIDER,
+    sirket_vkn: Optional[str] = None,
 ) -> list[IceAktarmaSonucu]:
     """Yol; .xml dosyası, .zip arşivi veya klasör olabilir - otomatik algılar."""
+    if sirket_vkn is None:
+        sirket_vkn = reports.sirket_vkn_getir(conn)
     yol = Path(yol)
     if yol.is_dir():
-        return klasoru_ice_aktar(conn, yol, varsayilan_tur)
+        return klasoru_ice_aktar(conn, yol, varsayilan_tur, sirket_vkn)
     if yol.suffix.lower() == ".zip":
-        return zip_ice_aktar(conn, yol, varsayilan_tur)
+        return zip_ice_aktar(conn, yol, varsayilan_tur, sirket_vkn)
     if yol.suffix.lower() == ".xml":
-        return [dosyayi_ice_aktar(conn, yol, varsayilan_tur)]
+        return [dosyayi_ice_aktar(conn, yol, varsayilan_tur, sirket_vkn)]
     raise ValueError(f"Desteklenmeyen dosya türü: {yol}")

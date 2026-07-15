@@ -3,6 +3,28 @@
 
 <h4 class="mb-3">E-Fatura İçe Aktar</h4>
 
+<div class="card mb-4" style="max-width: 640px;">
+  <div class="card-body">
+    <h6 class="card-title">Şirket Bilgisi (otomatik yön tespiti)</h6>
+    <p class="text-muted small">
+      Kendi şirketinizin VKN'sini kaydederseniz, her faturanın satıcı/alıcı
+      tarafı otomatik kontrol edilir: şirketiniz satıcıysa fatura
+      <strong>gelir</strong>, alıcıysa <strong>gider</strong> olarak
+      kaydedilir — aşağıdaki "İçe aktarma türü" seçimi sadece eşleşme
+      olmadığında (VKN boşsa veya faturanın hiçbir tarafı uymuyorsa) kullanılır.
+    </p>
+    <form method="post" action="{{ url_for('sirket_bilgisi_ayarla') }}" class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-0">Şirketinizin VKN'si</label>
+        <input type="text" class="form-control" name="sirket_vkn" value="{{ sirket_vkn }}" placeholder="Örn. 1234567890">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <p class="text-muted">
   GİB e-Fatura portalından indirilen UBL-TR formatındaki <code>.xml</code> dosyalarını
   (birden fazla dosya seçebilirsiniz) ya da bir <code>.zip</code> arşivini yükleyerek
@@ -12,7 +34,7 @@
 
 <form method="post" enctype="multipart/form-data" class="mb-4" style="max-width: 640px;">
   <div class="mb-3">
-    <label class="form-label d-block">İçe aktarma türü</label>
+    <label class="form-label d-block">İçe aktarma türü <span class="text-muted small">(şirket VKN'si eşleşmezse kullanılır)</span></label>
     <div class="btn-group" role="group">
       <input type="radio" class="btn-check" name="tur" id="tur-gider" value="gider" autocomplete="off" checked>
       <label class="btn btn-outline-danger" for="tur-gider">Gelen Fatura (Gider olarak ekle)</label>

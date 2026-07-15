@@ -200,7 +200,21 @@ def create_app(db_path: Optional[Path] = None) -> Flask:
                 basarili = sum(1 for s in sonuclar if s.basarili)
                 flash(f"{len(sonuclar)} dosyadan {basarili} tanesi aktarıldı.", "success")
 
-        return render_template("efatura.html", sonuclar=sonuclar)
+        conn = get_db()
+        return render_template(
+            "efatura.html", sonuclar=sonuclar, sirket_vkn=reports.sirket_vkn_getir(conn)
+        )
+
+    @app.route("/efatura/sirket-bilgisi", methods=["POST"])
+    def sirket_bilgisi_ayarla():
+        conn = get_db()
+        vkn = request.form.get("sirket_vkn", "").strip()
+        reports.sirket_vkn_ayarla(conn, vkn)
+        if vkn:
+            flash("Şirket VKN'si kaydedildi. Bundan sonraki içe aktarmalarda yön otomatik belirlenecek.", "success")
+        else:
+            flash("Şirket VKN'si temizlendi. Yön artık yukarıda seçtiğiniz türe göre belirlenecek.", "success")
+        return redirect(url_for("efatura"))
 
     # ------------------------------------------------------------------
     # Firmalar (e-fatura kaynaklı işlemlerin karşı tarafa göre dökümü)

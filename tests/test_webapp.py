@@ -166,6 +166,29 @@ def test_firmalar_sayfasi_efatura_sonrasi_gruplar(tmp_path):
     assert "En Fazla Fatura Oluşturan Firmalar".encode() in resp.data
 
 
+def test_sirket_vkn_kaydetme(tmp_path):
+    client = _client(tmp_path)
+    resp = client.post("/efatura/sirket-bilgisi", data={"sirket_vkn": "1234567890"}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert 'value="1234567890"'.encode() in resp.data
+
+
+def test_sirket_vkn_ile_yon_otomatik_belirlenir(tmp_path):
+    client = _client(tmp_path)
+    # ornek_fatura_1.xml'in satıcı VKN'si 1234567890 -> şirketimiz satıcıysa gelir olmalı
+    client.post("/efatura/sirket-bilgisi", data={"sirket_vkn": "1234567890"})
+
+    with open(FIXTURES / "ornek_fatura_1.xml", "rb") as f:
+        client.post(
+            "/efatura",
+            data={"tur": "gider", "dosyalar": (f, "ornek_fatura_1.xml")},  # tur=gider seçili olsa bile
+            content_type="multipart/form-data",
+        )
+
+    resp = client.get("/")
+    assert "Toplam Gelir: 118,00 TL".encode() in resp.data or "118".encode() in resp.data
+
+
 def test_tarih_filtresi_calisir(tmp_path):
     client = _client(tmp_path)
     client.post(

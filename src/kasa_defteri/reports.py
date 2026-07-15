@@ -16,6 +16,8 @@ from . import database
 from .models import GELIR, GIDER, KAYNAK_EFATURA
 
 ACILIS_BAKIYESI_ANAHTARI = "acilis_bakiyesi"
+SIRKET_VKN_ANAHTARI = "sirket_vkn"
+SIRKET_ADI_ANAHTARI = "sirket_adi"
 
 
 def acilis_bakiyesini_getir(conn: sqlite3.Connection) -> float:
@@ -24,6 +26,28 @@ def acilis_bakiyesini_getir(conn: sqlite3.Connection) -> float:
 
 def acilis_bakiyesini_ayarla(conn: sqlite3.Connection, tutar: float) -> None:
     database.ayar_ayarla(conn, ACILIS_BAKIYESI_ANAHTARI, str(tutar))
+
+
+def sirket_vkn_getir(conn: sqlite3.Connection) -> str:
+    """Kullanıcının kendi şirketinin VKN'si.
+
+    E-fatura içe aktarımında, bir faturanın satıcı tarafında mı yoksa alıcı
+    tarafında mı olduğumuzu (dolayısıyla gelir mi gider mi olduğunu)
+    otomatik belirlemek için kullanılır.
+    """
+    return (database.ayar_getir(conn, SIRKET_VKN_ANAHTARI, "") or "").strip()
+
+
+def sirket_vkn_ayarla(conn: sqlite3.Connection, vkn: str) -> None:
+    database.ayar_ayarla(conn, SIRKET_VKN_ANAHTARI, (vkn or "").strip())
+
+
+def sirket_adi_getir(conn: sqlite3.Connection) -> str:
+    return (database.ayar_getir(conn, SIRKET_ADI_ANAHTARI, "") or "").strip()
+
+
+def sirket_adi_ayarla(conn: sqlite3.Connection, ad: str) -> None:
+    database.ayar_ayarla(conn, SIRKET_ADI_ANAHTARI, (ad or "").strip())
 
 
 def toplam_gelir(

@@ -104,3 +104,60 @@ def test_kaynagi_ice_aktar_desteklenmeyen_uzanti(conn, tmp_path):
     dosya.write_text("merhaba")
     with pytest.raises(ValueError):
         efatura_import.kaynagi_ice_aktar(conn, dosya, GIDER)
+
+
+# --------------------------------------------------------------------------
+# Şirket VKN'sine göre otomatik yön tespiti
+# --------------------------------------------------------------------------
+
+def test_yonu_belirle_sirket_satici_ise_gelir():
+    veri = efatura_import.xml_dosyasini_ayristir(FIXTURES / "ornek_fatura_1.xml")
+    # ornek_fatura_1.xml: supplier_vkn = "1234567890"
+    tur = efatura_import.yonu_belirle(veri, GIDER, sirket_vkn="1234567890")
+    assert tur == GELIR
+
+
+def test_yonu_belirle_sirket_alici_ise_gider():
+    veri = efatura_import.xml_dosyasini_ayristir(FIXTURES / "ornek_fatura_1.xml")
+    # ornek_fatura_1.xml: customer_vkn = "9876543210"
+    tur = efatura_import.yonu_belirle(veri, GELIR, sirket_vkn="9876543210")
+    assert tur == GIDER
+
+
+def test_yonu_belirle_eslesme_yoksa_varsayilana_duser():
+    veri = efatura_import.xml_dosyasini_ayristir(FIXTURES / "ornek_fatura_1.xml")
+    tur = efatura_import.yonu_belirle(veri, GELIR, sirket_vkn="0000000000")
+    assert tur == GELIR  # eşleşme yok, varsayilan_tur aynen kullanılır
+
+
+def test_yonu_belirle_vkn_bos_ise_varsayilana_duser():
+    veri = efatura_import.xml_dosyasini_ayristir(FIXTURES / "ornek_fatura_1.xml")
+    tur = efatura_import.yonu_belirle(veri, GIDER, sirket_vkn="")
+    assert tur == GIDER
+
+
+def test_efatura_verisinden_islem_olustur_sirket_vkn_ile_gelir():
+    veri = efatura_import.xml_dosyasini_ayristir(FIXTURES / "ornek_fatura_1.xml")
+    islem = efatura_import.efatura_verisinden_islem_olustur(veri, GIDER, sirket_vkn="1234567890")
+    assert islem.tur == GELIR
+    assert islem.karsi_taraf == "TEST ŞİRKETİ LTD.ŞTİ."  # müşteri karşı taraf olur
+
+
+def test_dosyayi_ice_aktar_sirket_vkn_parametresiyle_yonu_gecersiz_kilar(conn):
+    # varsayilan_tur=GIDER verilse bile, şirket VKN'si satıcıyla eşleşince gelir olmalı
+    sonuc = efatura_import.dosyayi_ice_aktar(
+        conn, FIXTURES / "ornek_fatura_1.xml", varsayilan_tur=GIDER, sirket_vkn="1234567890"
+    )
+    assert sonuc.basarili
+    kayitlar = database.islemleri_listele(conn)
+    assert kayitlar[0].tur == GELIR
+
+
+def test_dosyayi_ice_aktar_ayarlardaki_sirket_vkn_kullanilir(conn):
+    from kasa_defteri import reports
+
+    reports.sirket_vkn_ayarla(conn, "9876543210")  # müşteri VKN'si
+    sonuc = efatura_import.dosyayi_ice_aktar(conn, FIXTURES / "ornek_fatura_1.xml", varsayilan_tur=GELIR)
+    assert sonuc.basarili
+    kayitlar = database.islemleri_listele(conn)
+    assert kayitlar[0].tur == GIDER  # ayarlardaki VKN alıcı tarafla eşleşti
